@@ -33,7 +33,8 @@ pub fn run() -> glib::ExitCode {
             app.quit();
         }
     });
-    app.connect_activate(|_| debug!("activated by a second launch; already running"));
+    // GApplication emits activate on every launch, ours included; there is no window to raise.
+    app.connect_activate(|_| {});
 
     if let Err(e) = app.register(gio::Cancellable::NONE) {
         info!("cannot register {DAEMON_APP_ID} on the session bus: {e}");
