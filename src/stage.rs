@@ -477,15 +477,8 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
                     }
                 }
             }
-            let fbo = target.as_ref().unwrap().fbo;
-            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
-            gl.viewport(0, 0, width, height);
-            scene.render(gl, &Frame { elapsed: clock.elapsed, delta: clock.delta, width, height });
-            // Resolves the samples into GtkGLArea's own framebuffer.
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fbo));
-            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, screen);
-            gl.blit_framebuffer(0, 0, width, height, 0, 0, width, height, glow::COLOR_BUFFER_BIT, glow::NEAREST);
-            gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
+            let frame = Frame { elapsed: clock.elapsed, delta: clock.delta, width, height };
+            draw(gl, scene.as_mut(), target.as_ref().unwrap(), screen, &frame);
             if !*checked_errors {
                 *checked_errors = true;
                 let error = gl.get_error();
@@ -543,6 +536,27 @@ fn log_stats(r: &mut Renderer, frame_clock: &gdk::FrameClock, now_us: i64) {
     }
 }
 
+/// Renders `frame` into the multisampled `target`, then resolves the samples into
+/// `screen` (GtkGLArea's own framebuffer, which cannot be multisampled).
+unsafe fn draw(
+    gl: &glow::Context,
+    scene: &mut dyn GlScene,
+    target: &Target,
+    screen: Option<glow::Framebuffer>,
+    frame: &Frame,
+) {
+    unsafe {
+        let (width, height) = target.size;
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.fbo));
+        gl.viewport(0, 0, width, height);
+        scene.render(gl, frame);
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(target.fbo));
+        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, screen);
+        gl.blit_framebuffer(0, 0, width, height, 0, 0, width, height, glow::COLOR_BUFFER_BIT, glow::NEAREST);
+        gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
+    }
+}
+
 unsafe fn create_target(gl: &glow::Context, size: (i32, i32), samples: i32) -> Result<Target, String> {
     unsafe {
         let (width, height) = size;
@@ -592,4 +606,92 @@ fn load_gl() -> Result<glow::Context, String> {
     // GTK links libepoxy, so dlclose() here only drops our extra reference.
     drop(lib);
     Ok(gl)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    /// One frame of every animation through `draw()` at the first monitor's size, in a
+    /// GL context GTK creates the same way as for GtkGLArea, without opening a window.
+    /// Run with `cargo test -- --ignored`; GIS_RENDER_DUMP=<dir> also saves PNGs.
+    #[test]
+    #[ignore = "needs a graphical session and a GPU"]
+    fn renders_every_animation_offscreen() {
+        gtk::init().expect("graphical session");
+        let display = gdk::Display::default().unwrap();
+        let context = display.create_gl_context().expect("GL context");
+        context.realize().expect("realize GL context");
+        context.make_current();
+        let dialect = if context.uses_es() { GlslDialect::Es300 } else { GlslDialect::Core150 };
+        let gl = load_gl().unwrap();
+        let monitor = display.monitors().item(0).and_downcast::<gdk::Monitor>().unwrap();
+        let (geometry, scale) = (monitor.geometry(), monitor.scale_factor());
+        let size = (geometry.width() * scale, geometry.height() * scale);
+        unsafe {
+            println!(
+                "GL: {} | {} | {dialect:?} | {}x{}",
+                gl.get_parameter_string(glow::RENDERER),
+                gl.get_parameter_string(glow::VERSION),
+                size.0,
+                size.1
+            );
+            // Stands in for GtkGLArea's framebuffer, an RGBA8 texture.
+            let texture = gl.create_texture().unwrap();
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+            gl.tex_storage_2d(glow::TEXTURE_2D, 1, glow::RGBA8, size.0, size.1);
+            let screen = gl.create_framebuffer().unwrap();
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(screen));
+            gl.framebuffer_texture_2d(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::TEXTURE_2D, Some(texture), 0);
+            assert_eq!(gl.check_framebuffer_status(glow::FRAMEBUFFER), glow::FRAMEBUFFER_COMPLETE);
+
+            for info in animations::ALL {
+                let mut scene = (info.create)(None);
+                scene.realize(&gl, dialect).expect("scene realize");
+                let samples = scene.msaa_samples().clamp(0, gl.get_parameter_i32(glow::MAX_SAMPLES));
+                let target = create_target(&gl, size, samples).expect("MSAA target");
+                let mut frame = Frame { elapsed: 0.0, delta: 1.0 / 60.0, width: size.0, height: size.1 };
+                draw(&gl, scene.as_mut(), &target, Some(screen), &frame);
+                gl.finish();
+                let frames = 120;
+                let start = Instant::now();
+                for i in 0..frames {
+                    frame.elapsed = 3.0 + f64::from(i) / 60.0;
+                    draw(&gl, scene.as_mut(), &target, Some(screen), &frame);
+                    gl.finish();
+                }
+                let per_frame_ms = start.elapsed().as_secs_f64() * 1000.0 / f64::from(frames);
+                assert_eq!(gl.get_error(), glow::NO_ERROR, "{}: GL error", info.id);
+
+                let mut pixels = vec![0u8; (size.0 * size.1 * 4) as usize];
+                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(screen));
+                gl.read_pixels(0, 0, size.0, size.1, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelPackData::Slice(Some(&mut pixels)));
+                let lit = pixels.chunks_exact(4).filter(|p| p[..3].iter().any(|&c| c > 16)).count();
+                let coverage = lit as f64 / f64::from(size.0 * size.1);
+                println!(
+                    "{}: {samples}x MSAA, {per_frame_ms:.2} ms/frame with the GPU drained each frame, {:.1}% of pixels lit",
+                    info.id,
+                    coverage * 100.0
+                );
+                assert!(coverage > 0.05, "{}: frame is (almost) black", info.id);
+                if let Some(dir) = std::env::var_os("GIS_RENDER_DUMP") {
+                    save_png(&pixels, size, &Path::new(&dir).join(format!("{}.png", info.id)));
+                }
+                delete_target(&gl, target);
+                scene.unrealize(&gl);
+            }
+        }
+    }
+
+    fn save_png(rgba: &[u8], (width, height): (i32, i32), path: &Path) {
+        // glReadPixels rows run bottom-up.
+        let stride = width as usize * 4;
+        let flipped: Vec<u8> = rgba.chunks_exact(stride).rev().flatten().copied().collect();
+        let bytes = glib::Bytes::from_owned(flipped);
+        gdk::MemoryTexture::new(width, height, gdk::MemoryFormat::R8g8b8a8, &bytes, stride)
+            .save_to_png(path)
+            .unwrap();
+    }
 }
