@@ -3,6 +3,7 @@ mod log;
 
 mod animations;
 mod config;
+mod daemon;
 mod dbus;
 mod preview;
 mod stage;
@@ -44,7 +45,7 @@ fn main() -> glib::ExitCode {
                 print!("{USAGE}");
                 return glib::ExitCode::SUCCESS;
             }
-            "preview" if command.is_none() => command = Some(arg),
+            "daemon" | "preview" if command.is_none() => command = Some(arg),
             other => {
                 eprintln!("Bilinmeyen argüman: {other}\n\n{USAGE}");
                 return glib::ExitCode::FAILURE;
@@ -53,6 +54,7 @@ fn main() -> glib::ExitCode {
     }
 
     match command.as_deref().unwrap_or("") {
+        "daemon" => daemon::run(),
         "preview" => preview::run(seconds),
         _ => {
             eprintln!("{USAGE}");
