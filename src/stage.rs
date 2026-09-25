@@ -46,6 +46,9 @@ const PREVIEW_GRACE: Duration = Duration::from_millis(800);
 /// and how far back an input we already saw may count as that same input.
 const ELSEWHERE_WAIT: Duration = Duration::from_millis(150);
 const ELSEWHERE_LOOKBACK: Duration = Duration::from_millis(300);
+/// Activity Mutter reports while our windows are still mapping is not trusted to
+/// mean input went elsewhere; direct input to our windows still closes at once.
+const ELSEWHERE_SETTLE: Duration = Duration::from_millis(300);
 const STATS_INTERVAL_S: f64 = 5.0;
 
 pub struct Stage {
@@ -194,7 +197,8 @@ impl Inner {
                 return;
             }
             let seen_here = inner.last_input.get().is_some_and(|t| t + ELSEWHERE_LOOKBACK >= fired);
-            if seen_here || inner.in_grace() {
+            let settling = fired.duration_since(inner.opened_at) < ELSEWHERE_SETTLE;
+            if seen_here || settling || inner.in_grace() {
                 inner.arm_active_watch();
             } else {
                 inner.close(CloseReason::InputElsewhere, None);
@@ -338,6 +342,12 @@ fn attach_input(inner: &Rc<Inner>, window: &gtk::Window) {
     window.add_controller(scroll);
 
     let motion = gtk::EventControllerMotion::new();
+    let weak = Rc::downgrade(inner);
+    motion.connect_enter(move |_, _, _| {
+        if let Some(inner) = weak.upgrade() {
+            inner.last_input.set(Some(Instant::now()));
+        }
+    });
     let weak = Rc::downgrade(inner);
     motion.connect_motion(move |c, x, y| {
         if let Some(inner) = weak.upgrade() {
