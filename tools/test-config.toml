@@ -1,0 +1,4 @@
+enabled = true
+idle_minutes = 1
+respect_inhibitors = true
+animation = "gears"

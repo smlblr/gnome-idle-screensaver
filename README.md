@@ -255,6 +255,17 @@ gerekmez. Örnek olarak `gears.rs`'e bakın.
 - Engel varken başlamaması, anahtar kapalıyken başlaması.
 - Oturum kapatıp açınca otomatik başlama.
 
+### Ekran testleri için araçlar (`tools/`)
+
+- `tools/test-config.toml`: 1 dk eşikli test ayarı. `GNOME_IDLE_SCREENSAVER_CONFIG` ile verilir;
+  asıl ayar dosyasına dokunmaz.
+- `tools/inject.py move:3,2 sleep:1 move:120,0 key:0xffe1`: Mutter RemoteDesktop üzerinden yapay
+  girdi. Günlükteki kapanma satırıyla karşılaştırmak için enjeksiyon zamanını CLOCK_MONOTONIC
+  olarak yazar.
+- `tools/shot.py çıktı.png`: portal üzerinden etkileşimsiz ekran görüntüsü; dosyayı ~/Pictures'tan
+  alıp taşır.
+- `tools/cpu.sh PID SANİYE`: sürecin o aralıktaki CPU %'si (100 = bir çekirdek) ve RSS'i.
+
 ## Bilinen sınırlar
 
 - Çoklu monitör: her monitöre bir pencere açılır, ama bu makinede tek ekran olduğu için denenmedi.
