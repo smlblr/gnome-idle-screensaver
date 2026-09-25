@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ekran Koruyucu İzleyicisi
+Comment=Boşta kalma süresini izler, süre dolunca ekran koruyucuyu başlatır
+Exec=@BINARY@ daemon
+Icon=io.github.smlblr.GnomeIdleScreensaver
+Terminal=false
+NoDisplay=true
+OnlyShowIn=GNOME;
+X-GNOME-Autostart-enabled=true
