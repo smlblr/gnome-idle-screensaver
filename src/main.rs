@@ -6,6 +6,7 @@ mod config;
 mod daemon;
 mod dbus;
 mod preview;
+mod settings;
 mod stage;
 
 use gtk::glib;
@@ -45,7 +46,7 @@ fn main() -> glib::ExitCode {
                 print!("{USAGE}");
                 return glib::ExitCode::SUCCESS;
             }
-            "daemon" | "preview" if command.is_none() => command = Some(arg),
+            "settings" | "daemon" | "preview" if command.is_none() => command = Some(arg),
             other => {
                 eprintln!("Bilinmeyen argüman: {other}\n\n{USAGE}");
                 return glib::ExitCode::FAILURE;
@@ -53,12 +54,9 @@ fn main() -> glib::ExitCode {
         }
     }
 
-    match command.as_deref().unwrap_or("") {
+    match command.as_deref().unwrap_or("settings") {
         "daemon" => daemon::run(),
         "preview" => preview::run(seconds),
-        _ => {
-            eprintln!("{USAGE}");
-            glib::ExitCode::FAILURE
-        }
+        _ => settings::run(),
     }
 }
