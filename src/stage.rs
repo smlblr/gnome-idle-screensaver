@@ -216,29 +216,35 @@ impl Inner {
         }
         self.watch_subscription.borrow_mut().take();
         let windows = std::mem::take(&mut *self.windows.borrow_mut());
-        let display = windows.first().map(|w| WidgetExt::display(w));
-        for window in windows {
-            window.destroy();
-        }
-        // A round trip guarantees Mutter has processed the unmap; it repaints on the next vblank.
-        if let Some(display) = display {
-            display.sync();
-        }
-        let acked_ms = crate::log::now_ms();
-        match event_time {
-            Some(t) => {
-                let event_ms = wayland_time_to_monotonic_ms(t, handled_ms);
-                info!(
-                    "stage closed ({reason:?}): input→handler {:.1} ms, input→compositor ack {:.1} ms",
-                    handled_ms - event_ms,
-                    acked_ms - event_ms
-                );
+        let opened_at = self.opened_at;
+        let on_closed = self.on_closed.borrow_mut().take();
+        // Teardown waits for the next main-loop turn: destroying the window whose event is
+        // still being dispatched, then a Wayland round trip, segfaulted in libgtk (2026-09-28).
+        glib::idle_add_local_once(move || {
+            let display = windows.first().map(|w| WidgetExt::display(w));
+            for window in windows {
+                window.destroy();
             }
-            None => info!("stage closed ({reason:?}) after {:.1} s", self.opened_at.elapsed().as_secs_f64()),
-        }
-        if let Some(on_closed) = self.on_closed.borrow_mut().take() {
-            glib::idle_add_local_once(move || on_closed(reason));
-        }
+            // Once the round trip returns Mutter has processed the unmap; it repaints on the next vblank.
+            if let Some(display) = display {
+                display.sync();
+            }
+            let acked_ms = crate::log::now_ms();
+            match event_time {
+                Some(t) => {
+                    let event_ms = wayland_time_to_monotonic_ms(t, handled_ms);
+                    info!(
+                        "stage closed ({reason:?}): input→handler {:.1} ms, input→compositor ack {:.1} ms",
+                        handled_ms - event_ms,
+                        acked_ms - event_ms
+                    );
+                }
+                None => info!("stage closed ({reason:?}) after {:.1} s", opened_at.elapsed().as_secs_f64()),
+            }
+            if let Some(on_closed) = on_closed {
+                on_closed(reason);
+            }
+        });
     }
 }
 
