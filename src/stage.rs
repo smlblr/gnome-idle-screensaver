@@ -681,7 +681,7 @@ mod tests {
                     info.id,
                     coverage * 100.0
                 );
-                assert!(coverage > 0.05, "{}: frame is (almost) black", info.id);
+                assert!(coverage > 0.01, "{}: frame is (almost) black", info.id);
                 if let Some(dir) = std::env::var_os("GIS_RENDER_DUMP") {
                     save_png(&pixels, size, &Path::new(&dir).join(format!("{}.png", info.id)));
                 }

@@ -2,14 +2,20 @@
 //! the stage (src/stage.rs) owns the window, frame clock, MSAA target and input.
 //! README.md, "Yeni bir animasyon eklemek", walks through adding one.
 
+pub mod aurora;
+pub mod fullscreen;
 pub mod gears;
 pub mod math;
+pub mod plasma;
+pub mod starfield;
+pub mod tunnel;
 
 use glow::HasContext;
 use serde::de::DeserializeOwned;
 
 /// Every module the settings window offers, in display order. The first is the default.
-pub const ALL: &[AnimationInfo] = &[gears::INFO];
+pub const ALL: &[AnimationInfo] =
+    &[gears::INFO, starfield::INFO, plasma::INFO, tunnel::INFO, aurora::INFO];
 
 pub struct AnimationInfo {
     /// Stored in config.toml (`animation = "…"`) and used as the options table name.
