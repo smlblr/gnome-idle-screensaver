@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.92"
 description = "Idle screensaver for GNOME on Wayland"
 publish = false
+license = "MIT"
 
 [dependencies]
 adw = { version = "0.9", package = "libadwaita", features = ["v1_5"] }

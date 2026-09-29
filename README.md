@@ -43,6 +43,20 @@ Betik izleyiciyi hemen başlatır (`--no-start` ile başlatmaz); sonraki oturuml
 kendiliğinden başlar. GNOME Shell yeni simgeyi uygulama ızgarasında çoğu zaman ancak oturum
 kapatılıp açılınca gösterir.
 
+## Debian paketi
+
+```bash
+nice -n 10 cargo build --release -j 4
+./packaging/build-deb.sh
+sudo apt install ./dist/gnome-idle-screensaver_0.1.0_amd64.deb
+```
+
+Paket `/usr/bin`, `/usr/share/applications`, `/usr/share/icons/hicolor/scalable/apps` ve
+`/etc/xdg/autostart` altına kurulur; kaldırmak için `sudo apt remove gnome-idle-screensaver`.
+Gereken: `libgtk-4-1 (>= 4.14)`, `libadwaita-1-0 (>= 1.5)`. Paketi kurmadan önce
+`install.sh` ile kurduğunuz kopyayı `./uninstall.sh` ile kaldırın; aksi hâlde iki otomatik
+başlatma girdisi olur (ikinci izleyici hiçbir şey yapmadan çıkar, ama karışıklık yaratır).
+
 ## Kaldırma
 
 ```bash
@@ -62,7 +76,7 @@ Her değişiklik anında kaydedilir; izleyici dosyayı izler, yeniden başlatmak
 | Ekran koruyucu açık/kapalı | `enabled` | `true` |
 | Boşta kalma süresi (dakika, 1–720) | `idle_minutes` | `5` |
 | Video oynarken başlama | `respect_inhibitors` | `true` |
-| Animasyon (`gears`, `starfield`, `plasma`, `tunnel`, `aurora`) | `animation` | `"gears"` |
+| Animasyon (`gears`, `starfield`, `plasma`, `tunnel`, `aurora`, `blank`) | `animation` | `"gears"` |
 
 **Önizle** düğmesi seçili animasyonu hemen gösterir. İlk 0,8 saniyedeki girdi yok sayılır; böylece
 düğmeye tıklayan el önizlemeyi hemen kapatmaz.
@@ -95,9 +109,10 @@ Hatalı bir tablo animasyonu durdurmaz: günlüğe yazılır, varsayılanlar kul
 |---|---|---|---|
 | `gears` | Çarklar | glxgears'ın üç çarkı, MSAA, yavaş dönen kamera | yukarıdaki tablo |
 | `starfield` | Yıldızlar | Yıldızlı uzayda ileri uçuş, altı katman | `speed` |
-| `plasma` | Plazma | Sinüs dalgalarından klasik renk akışı | `speed` |
+| `plasma` | Plazma | Sinüs dalgalarından, karanlık odaya uygun sönük ve yavaş renk akışı | `speed` |
 | `tunnel` | Tünel | Dama desenli, hafifçe dönen sonsuz tünel | `speed` |
 | `aurora` | Kuzey ışıkları | Yıldızlı gökte dalgalanan perdeler | `speed` |
+| `blank` | Kapalı ekran (siyah) | Ekran kapanmış gibi görünen düz siyah; birkaç kare çizilip bırakılır, sonra CPU ve GPU'ya yük bindirmez | yok |
 
 `starfield`, `plasma`, `tunnel` ve `aurora` tek bir tam ekran parça gölgelendiricisidir
 (`src/animations/fullscreen.rs`); MSAA kullanmazlar, çünkü kenar çizen bir geometri yoktur.
@@ -302,6 +317,5 @@ gerekmez. Örnek olarak `gears.rs`'e bakın.
 
 ## Lisans
 
-`src/animations/gears.rs`, Mesa demos'taki glxgears.c'nin uyarlamasıdır:
-Copyright (C) 1999-2001 Brian Paul, MIT (`LICENSES/MIT-mesa-demos.txt`). Projenin geri kalanının
-lisansı henüz belirlenmedi.
+MIT, bkz. `LICENSE`. `src/animations/gears.rs`, Mesa demos'taki glxgears.c'nin uyarlamasıdır:
+Copyright (C) 1999-2001 Brian Paul, MIT (`LICENSES/MIT-mesa-demos.txt`).
