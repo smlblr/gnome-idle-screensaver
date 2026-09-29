@@ -62,7 +62,7 @@ Her değişiklik anında kaydedilir; izleyici dosyayı izler, yeniden başlatmak
 | Ekran koruyucu açık/kapalı | `enabled` | `true` |
 | Boşta kalma süresi (dakika, 1–720) | `idle_minutes` | `5` |
 | Video oynarken başlama | `respect_inhibitors` | `true` |
-| Animasyon | `animation` | `"gears"` |
+| Animasyon (`gears`, `starfield`, `plasma`, `tunnel`, `aurora`) | `animation` | `"gears"` |
 
 **Önizle** düğmesi seçili animasyonu hemen gösterir. İlk 0,8 saniyedeki girdi yok sayılır; böylece
 düğmeye tıklayan el önizlemeyi hemen kapatmaz.
@@ -89,6 +89,28 @@ msaa_samples = 4        # sürücünün izin verdiği en yüksek değere kırpı
 
 Hatalı bir tablo animasyonu durdurmaz: günlüğe yazılır, varsayılanlar kullanılır.
 
+### Animasyonlar
+
+| Kimlik | Ad | Ne gösterir | Seçenek |
+|---|---|---|---|
+| `gears` | Çarklar | glxgears'ın üç çarkı, MSAA, yavaş dönen kamera | yukarıdaki tablo |
+| `starfield` | Yıldızlar | Yıldızlı uzayda ileri uçuş, altı katman | `speed` |
+| `plasma` | Plazma | Sinüs dalgalarından klasik renk akışı | `speed` |
+| `tunnel` | Tünel | Dama desenli, hafifçe dönen sonsuz tünel | `speed` |
+| `aurora` | Kuzey ışıkları | Yıldızlı gökte dalgalanan perdeler | `speed` |
+
+`starfield`, `plasma`, `tunnel` ve `aurora` tek bir tam ekran parça gölgelendiricisidir
+(`src/animations/fullscreen.rs`); MSAA kullanmazlar, çünkü kenar çizen bir geometri yoktur.
+`speed` için `1.0` tasarım hızıdır:
+
+```toml
+[animations.plasma]
+speed = 0.5
+```
+
+Ayarlar penceresini açmadan bir animasyona bakmak için:
+`gnome-idle-screensaver preview --animation aurora --seconds 15`
+
 ## Komut satırı
 
 ```
@@ -96,6 +118,7 @@ gnome-idle-screensaver [settings|daemon|preview] [-v] [--seconds N]
 ```
 
 - `preview --seconds 10`: seçili animasyonu 10 sn gösterir (girdiyle daha önce kapanır).
+- `preview --animation KİMLİK`: ayardakini değil, verilen animasyonu gösterir; ayar dosyasına yazmaz.
 - `-v`: kare hızı, odak ve kapanma gecikmesi günlüğe yazılır.
 - `GNOME_IDLE_SCREENSAVER_CONFIG=/yol/config.toml`: başka bir ayar dosyası (test için).
 - `cargo test --release -- --ignored`: her animasyonu ekran dışında çizer, GL hatası ve kare süresi
@@ -216,6 +239,10 @@ ortak alt kümesinde yazılır. `GlslDialect::header()` başlarına `#version 15
 3. Seçenekleri varsa `#[derive(Deserialize, Default)]` bir yapı yazın; `[animations.benim]`
    tablosundan okunur. `config.rs`'e dokunmak gerekmez.
 
+Yalnızca bir parça gölgelendiricisi yazacaksanız `GlScene`'i elle uygulamayın:
+`fullscreen::FullscreenScene::new(FRAGMENT, hız)` verilen gölgelendiriciyi `u_time` ve
+`u_resolution` uniform'larıyla çalıştırır; örnek `plasma.rs` (20 satır).
+
 Ayarlar penceresindeki seçim listesi `ALL`'dan dolar; kayıt dışında başka bir yeri değiştirmek
 gerekmez. Örnek olarak `gears.rs`'e bakın.
 
@@ -246,6 +273,7 @@ gerekmez. Örnek olarak `gears.rs`'e bakın.
 | Mutter izlemesi, engel varken | 589 sn boştayken 3 sn'lik `AddIdleWatch` 12 sn içinde tetiklenmedi |
 | GL bağlamı (GTK'nın seçimi) | **OpenGL ES 3.2**, Mesa 25.2.8, Intel UHD 630 (CFL GT2). NVIDIA kullanılmıyor |
 | Çizim, ekran dışı (`cargo test -- --ignored`) | 1920×1080, 4x MSAA: **1,46 ms/kare**, her karede GPU boşaltılarak. GL hatası yok. Kenarlarda ara tonlar var (MSAA çözümlemesi çalışıyor) |
+| Ekran dışı kare süresi, 1920×1080 | gears 1,6 · plazma 1,5 · tünel 2,0 · kuzey ışıkları 4,4 · yıldızlar 4,6 ms (60 Hz bütçesi 16,7 ms) |
 | Derleme | `nice -n 10 cargo build --release -j 2`, yaklaşık 3 dk. Makinede başka bir süreç 5,5 çekirdek kullanırken yük en fazla 9,05, en yüksek 86 °C |
 
 **Henüz ölçülmedi** (ekranı kaplayan testler ertelendi):
