@@ -353,10 +353,11 @@ fn attach_input(inner: &Rc<Inner>, window: &gtk::Window) {
 
     let motion = gtk::EventControllerMotion::new();
     let weak = Rc::downgrade(inner);
-    motion.connect_enter(move |_, x, y| {
+    // The enter position is not trusted as a resting position: under a window that just
+    // mapped it can be far from where the pointer really is.
+    motion.connect_enter(move |_, _, _| {
         if let Some(inner) = weak.upgrade() {
             inner.last_input.set(Some(Instant::now()));
-            inner.pointer.set(Some((x, y)));
         }
     });
     let weak = Rc::downgrade(inner);
