@@ -6,6 +6,11 @@ rust-version = "1.92"
 description = "Idle screensaver for GNOME on Wayland"
 publish = false
 license = "MIT"
+repository = "https://github.com/smlblr/gnome-idle-screensaver"
+homepage = "https://github.com/smlblr/gnome-idle-screensaver"
+readme = "README.md"
+keywords = ["gnome", "wayland", "screensaver", "gtk4", "libadwaita"]
+categories = ["gui"]
 
 [dependencies]
 adw = { version = "0.9", package = "libadwaita", features = ["v1_5"] }

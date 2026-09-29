@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Kullanıcı düzeyinde kurulum. Yalnızca ~/.local ve ~/.config altına yazar; sudo gerekmez.
-#   ./install.sh             kur ve izleyiciyi (yeniden) başlat
-#   ./install.sh --no-start  kur, izleyiciyi başlatma
+# User-level install: writes only under ~/.local and ~/.config, needs no sudo.
+#   ./install.sh             install and (re)start the watcher
+#   ./install.sh --no-start  install, do not start the watcher
+# Kullanıcı düzeyinde kurulum; yalnızca ~/.local ve ~/.config altına yazar, sudo gerekmez.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
+
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in tr*) TR=1 ;; *) TR=0 ;; esac
+say() { if ((TR)); then echo "$2"; else echo "$1"; fi; }
 
 APP_ID=io.github.smlblr.GnomeIdleScreensaver
 BIN_DIR="$HOME/.local/bin"
@@ -19,15 +23,17 @@ start=1
 [[ ${1:-} == --no-start ]] && start=0
 
 if [[ ! -x $BUILD ]]; then
-    echo "Önce derleyin: nice -n 10 cargo build --release -j 6" >&2
+    say "Build first: cargo build --release  (on a laptop: nice -n 10 cargo build --release -j 4)" \
+        "Önce derleyin: cargo build --release  (dizüstünde: nice -n 10 cargo build --release -j 4)" >&2
     exit 1
 fi
 if [[ $BIN == *[[:space:]]* ]]; then
-    echo "Boşluk içeren kurulum yolu desteklenmiyor: $BIN" >&2
+    say "An install path with spaces is not supported: $BIN" \
+        "Boşluk içeren kurulum yolu desteklenmiyor: $BIN" >&2
     exit 1
 fi
 
-render() { # şablon hedef
+render() { # template target
     local tmp
     tmp=$(mktemp)
     sed "s|@BINARY@|$BIN|g" "$1" >"$tmp"
@@ -36,7 +42,7 @@ render() { # şablon hedef
     echo "  $2"
 }
 
-echo "Kuruluyor:"
+say "Installing:" "Kuruluyor:"
 install -Dm755 "$BUILD" "$BIN"
 echo "  $BIN"
 render "data/$APP_ID.desktop.in" "$APPS/$APP_ID.desktop"
@@ -57,17 +63,19 @@ touch "$ICONS"
 
 pids=$(pgrep -u "$USER" -x -f "$BIN daemon" || true)
 if [[ -n $pids ]]; then
-    echo "Eski izleyici durduruluyor (PID $pids)"
+    say "Stopping the old watcher (PID $pids)" "Eski izleyici durduruluyor (PID $pids)"
+    # shellcheck disable=SC2086 # several PIDs, word splitting intended
     kill $pids
 fi
 if ((start)); then
     gio launch "$AUTOSTART/$APP_ID.Daemon.desktop" >/dev/null 2>&1 ||
         setsid -f "$BIN" daemon </dev/null >/dev/null 2>&1
-    echo "İzleyici başlatıldı; sonraki oturumlarda kendiliğinden başlar."
+    say "Watcher started; it starts by itself in later sessions." \
+        "İzleyici başlatıldı; sonraki oturumlarda kendiliğinden başlar."
 fi
 
-cat <<EOF
-
-Ayarlar: uygulama ızgarasında "Ekran Koruyucu" ya da: $BIN settings
-GNOME Shell yeni simgeyi çoğu zaman ancak oturum kapatılıp açılınca gösterir.
-EOF
+echo
+say "Settings: open \"Screensaver\" in the app grid, or run: $BIN settings" \
+    "Ayarlar: uygulama ızgarasında \"Ekran Koruyucu\" ya da: $BIN settings"
+say "GNOME Shell usually shows a new icon only after you log out and in." \
+    "GNOME Shell yeni simgeyi çoğu zaman ancak oturum kapatılıp açılınca gösterir."
