@@ -51,6 +51,8 @@ const ELSEWHERE_LOOKBACK: Duration = Duration::from_millis(300);
 const ELSEWHERE_SETTLE: Duration = Duration::from_millis(300);
 const STATS_INTERVAL_S: f64 = 5.0;
 
+type CloseCallback = Box<dyn FnOnce(CloseReason)>;
+
 pub struct Stage {
     inner: Rc<Inner>,
 }
@@ -60,7 +62,7 @@ struct Inner {
     opened_at: Instant,
     windows: RefCell<Vec<gtk::Window>>,
     closed: Cell<bool>,
-    on_closed: RefCell<Option<Box<dyn FnOnce(CloseReason)>>>,
+    on_closed: RefCell<Option<CloseCallback>>,
     motion: Cell<Option<MotionBurst>>,
     pointer: Cell<Option<(f64, f64)>>,
     last_input: Cell<Option<Instant>>,
@@ -105,7 +107,9 @@ impl Stage {
         let info = animations::find(&config.animation);
         let monitors = display.monitors();
         for i in 0..monitors.n_items() {
-            let Some(monitor) = monitors.item(i).and_downcast::<gdk::Monitor>() else { continue };
+            let Some(monitor) = monitors.item(i).and_downcast::<gdk::Monitor>() else {
+                continue;
+            };
             let scene = (info.create)(config.animation_options(info.id));
             let window = build_window(&inner, app, &monitor, scene);
             inner.windows.borrow_mut().push(window);
@@ -118,7 +122,11 @@ impl Stage {
                 Mode::Preview => window.present(),
             }
         }
-        debug!("stage opened: {} window(s), mode {mode:?}, animation {}", monitors.n_items(), info.id);
+        debug!(
+            "stage opened: {} window(s), mode {mode:?}, animation {}",
+            monitors.n_items(),
+            info.id
+        );
         inner.watch_input_elsewhere();
         Stage { inner }
     }
@@ -158,7 +166,11 @@ impl Inner {
         let (rest_x, rest_y) = self.pointer.replace(Some((x, y))).unwrap_or((x, y));
         let burst = match self.motion.get() {
             Some(b) if now - b.last < MOTION_QUIET && !self.in_grace() => b,
-            _ => MotionBurst { x: rest_x, y: rest_y, last: now },
+            _ => MotionBurst {
+                x: rest_x,
+                y: rest_y,
+                last: now,
+            },
         };
         if (x - burst.x).hypot(y - burst.y) >= MOTION_THRESHOLD {
             self.close(CloseReason::Motion, Some(event_time));
@@ -171,7 +183,9 @@ impl Inner {
     /// over a terminal), so keys would not reach us. Mutter's user-active watch sees
     /// all input; if none of it arrived here, it went elsewhere and we close.
     fn watch_input_elsewhere(self: &Rc<Self>) {
-        let Some(monitor) = &self.idle_monitor else { return };
+        let Some(monitor) = &self.idle_monitor else {
+            return;
+        };
         let weak = Rc::downgrade(self);
         let subscription = monitor.subscribe_watch_fired(move |id| {
             let Some(inner) = weak.upgrade() else { return };
@@ -185,7 +199,9 @@ impl Inner {
     }
 
     fn arm_active_watch(&self) {
-        let (Some(monitor), false) = (&self.idle_monitor, self.closed.get()) else { return };
+        let (Some(monitor), false) = (&self.idle_monitor, self.closed.get()) else {
+            return;
+        };
         match monitor.add_user_active_watch() {
             Ok(id) => self.active_watch.set(Some(id)),
             Err(e) => info!("AddUserActiveWatch failed: {e}"),
@@ -200,7 +216,10 @@ impl Inner {
             if inner.closed.get() {
                 return;
             }
-            let seen_here = inner.last_input.get().is_some_and(|t| t + ELSEWHERE_LOOKBACK >= fired);
+            let seen_here = inner
+                .last_input
+                .get()
+                .is_some_and(|t| t + ELSEWHERE_LOOKBACK >= fired);
             let settling = fired.duration_since(inner.opened_at) < ELSEWHERE_SETTLE;
             if seen_here || settling || inner.in_grace() {
                 inner.arm_active_watch();
@@ -225,7 +244,7 @@ impl Inner {
         // Teardown waits for the next main-loop turn: destroying the window whose event is
         // still being dispatched, then a Wayland round trip, segfaulted in libgtk (2026-09-28).
         glib::idle_add_local_once(move || {
-            let display = windows.first().map(|w| WidgetExt::display(w));
+            let display = windows.first().map(WidgetExt::display);
             for window in windows {
                 window.destroy();
             }
@@ -243,7 +262,10 @@ impl Inner {
                         acked_ms - event_ms
                     );
                 }
-                None => info!("stage closed ({reason:?}) after {:.1} s", opened_at.elapsed().as_secs_f64()),
+                None => info!(
+                    "stage closed ({reason:?}) after {:.1} s",
+                    opened_at.elapsed().as_secs_f64()
+                ),
             }
             if let Some(on_closed) = on_closed {
                 on_closed(reason);
@@ -265,7 +287,11 @@ fn install_css(display: &gdk::Display) {
     }
     let provider = gtk::CssProvider::new();
     provider.load_from_string("window.gis-stage { background-color: black; }");
-    gtk::style_context_add_provider_for_display(display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+    gtk::style_context_add_provider_for_display(
+        display,
+        &provider,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
 }
 
 fn build_window(
@@ -300,11 +326,18 @@ fn build_window(
     });
     let opened_at = inner.opened_at;
     window.connect_is_active_notify(move |w| {
-        debug!("stage window active={} at +{} ms", w.is_active(), opened_at.elapsed().as_millis());
+        debug!(
+            "stage window active={} at +{} ms",
+            w.is_active(),
+            opened_at.elapsed().as_millis()
+        );
     });
     let weak = Rc::downgrade(inner);
     window.connect_map(move |w| {
-        debug!("stage window mapped at +{} ms", opened_at.elapsed().as_millis());
+        debug!(
+            "stage window mapped at +{} ms",
+            opened_at.elapsed().as_millis()
+        );
         let w = w.downgrade();
         let weak = weak.clone();
         glib::timeout_add_local_once(Duration::from_millis(1000), move || {
@@ -422,8 +455,14 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
             info!("GL context unavailable, showing black: {e}");
             return;
         }
-        let Some(context) = area.context() else { return };
-        let dialect = if context.uses_es() { GlslDialect::Es300 } else { GlslDialect::Core150 };
+        let Some(context) = area.context() else {
+            return;
+        };
+        let dialect = if context.uses_es() {
+            GlslDialect::Es300
+        } else {
+            GlslDialect::Core150
+        };
         let gl = match load_gl() {
             Ok(gl) => gl,
             Err(e) => {
@@ -471,8 +510,20 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
     let r = renderer.clone();
     area.connect_render(move |_, _| {
         let mut r = r.borrow_mut();
-        let Renderer { scene, gl, samples, target, size, clock, stats, checked_errors, rendered } = &mut *r;
-        let Some(gl) = gl.as_ref() else { return glib::Propagation::Proceed };
+        let Renderer {
+            scene,
+            gl,
+            samples,
+            target,
+            size,
+            clock,
+            stats,
+            checked_errors,
+            rendered,
+        } = &mut *r;
+        let Some(gl) = gl.as_ref() else {
+            return glib::Propagation::Proceed;
+        };
         let (width, height) = *size;
         if width <= 0 || height <= 0 {
             return glib::Propagation::Stop;
@@ -491,7 +542,12 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
                     }
                 }
             }
-            let frame = Frame { elapsed: clock.elapsed, delta: clock.delta, width, height };
+            let frame = Frame {
+                elapsed: clock.elapsed,
+                delta: clock.delta,
+                width,
+                height,
+            };
             draw(gl, scene.as_mut(), target.as_ref().unwrap(), screen, &frame);
             if !*checked_errors {
                 *checked_errors = true;
@@ -531,13 +587,16 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
 fn log_stats(r: &mut Renderer, frame_clock: &gdk::FrameClock, now_us: i64) {
     let size = r.size;
     let stats = &mut r.stats;
-    if !stats.logged_refresh {
-        if let Some(t) = frame_clock.current_timings() {
-            let interval = t.refresh_interval();
-            if interval > 0 {
-                stats.logged_refresh = true;
-                debug!("monitor refresh interval {interval} µs ({:.2} Hz)", 1e6 / interval as f64);
-            }
+    if !stats.logged_refresh
+        && let Some(t) = frame_clock.current_timings()
+    {
+        let interval = t.refresh_interval();
+        if interval > 0 {
+            stats.logged_refresh = true;
+            debug!(
+                "monitor refresh interval {interval} µs ({:.2} Hz)",
+                1e6 / interval as f64
+            );
         }
     }
     let since = *stats.since_us.get_or_insert(now_us);
@@ -571,26 +630,68 @@ unsafe fn draw(
         scene.render(gl, frame);
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(target.fbo));
         gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, screen);
-        gl.blit_framebuffer(0, 0, width, height, 0, 0, width, height, glow::COLOR_BUFFER_BIT, glow::NEAREST);
+        gl.blit_framebuffer(
+            0,
+            0,
+            width,
+            height,
+            0,
+            0,
+            width,
+            height,
+            glow::COLOR_BUFFER_BIT,
+            glow::NEAREST,
+        );
         gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
     }
 }
 
-unsafe fn create_target(gl: &glow::Context, size: (i32, i32), samples: i32) -> Result<Target, String> {
+unsafe fn create_target(
+    gl: &glow::Context,
+    size: (i32, i32),
+    samples: i32,
+) -> Result<Target, String> {
     unsafe {
         let (width, height) = size;
         let fbo = gl.create_framebuffer()?;
         gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
         let color = gl.create_renderbuffer()?;
         gl.bind_renderbuffer(glow::RENDERBUFFER, Some(color));
-        gl.renderbuffer_storage_multisample(glow::RENDERBUFFER, samples, glow::RGBA8, width, height);
-        gl.framebuffer_renderbuffer(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(color));
+        gl.renderbuffer_storage_multisample(
+            glow::RENDERBUFFER,
+            samples,
+            glow::RGBA8,
+            width,
+            height,
+        );
+        gl.framebuffer_renderbuffer(
+            glow::FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::RENDERBUFFER,
+            Some(color),
+        );
         let depth = gl.create_renderbuffer()?;
         gl.bind_renderbuffer(glow::RENDERBUFFER, Some(depth));
-        gl.renderbuffer_storage_multisample(glow::RENDERBUFFER, samples, glow::DEPTH_COMPONENT24, width, height);
-        gl.framebuffer_renderbuffer(glow::FRAMEBUFFER, glow::DEPTH_ATTACHMENT, glow::RENDERBUFFER, Some(depth));
+        gl.renderbuffer_storage_multisample(
+            glow::RENDERBUFFER,
+            samples,
+            glow::DEPTH_COMPONENT24,
+            width,
+            height,
+        );
+        gl.framebuffer_renderbuffer(
+            glow::FRAMEBUFFER,
+            glow::DEPTH_ATTACHMENT,
+            glow::RENDERBUFFER,
+            Some(depth),
+        );
         gl.bind_renderbuffer(glow::RENDERBUFFER, None);
-        let target = Target { fbo, color, depth, size };
+        let target = Target {
+            fbo,
+            color,
+            depth,
+            size,
+        };
         let status = gl.check_framebuffer_status(glow::FRAMEBUFFER);
         if status != glow::FRAMEBUFFER_COMPLETE {
             delete_target(gl, target);
@@ -635,7 +736,7 @@ mod tests {
 
     /// One frame of every animation through `draw()` at the first monitor's size, in a
     /// GL context GTK creates the same way as for GtkGLArea, without opening a window.
-    /// Run with `cargo test -- --ignored`; GIS_RENDER_DUMP=<dir> also saves PNGs.
+    /// Run via tools/gui-tests.sh; GIS_RENDER_DUMP=<dir> also saves PNGs.
     #[test]
     #[ignore = "needs a graphical session and a GPU"]
     fn renders_every_animation_offscreen() {
@@ -644,9 +745,17 @@ mod tests {
         let context = display.create_gl_context().expect("GL context");
         context.realize().expect("realize GL context");
         context.make_current();
-        let dialect = if context.uses_es() { GlslDialect::Es300 } else { GlslDialect::Core150 };
+        let dialect = if context.uses_es() {
+            GlslDialect::Es300
+        } else {
+            GlslDialect::Core150
+        };
         let gl = load_gl().unwrap();
-        let monitor = display.monitors().item(0).and_downcast::<gdk::Monitor>().unwrap();
+        let monitor = display
+            .monitors()
+            .item(0)
+            .and_downcast::<gdk::Monitor>()
+            .unwrap();
         let (geometry, scale) = (monitor.geometry(), monitor.scale_factor());
         let size = (geometry.width() * scale, geometry.height() * scale);
         unsafe {
@@ -663,15 +772,31 @@ mod tests {
             gl.tex_storage_2d(glow::TEXTURE_2D, 1, glow::RGBA8, size.0, size.1);
             let screen = gl.create_framebuffer().unwrap();
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(screen));
-            gl.framebuffer_texture_2d(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::TEXTURE_2D, Some(texture), 0);
-            assert_eq!(gl.check_framebuffer_status(glow::FRAMEBUFFER), glow::FRAMEBUFFER_COMPLETE);
+            gl.framebuffer_texture_2d(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                Some(texture),
+                0,
+            );
+            assert_eq!(
+                gl.check_framebuffer_status(glow::FRAMEBUFFER),
+                glow::FRAMEBUFFER_COMPLETE
+            );
 
             for info in animations::ALL {
                 let mut scene = (info.create)(None);
                 scene.realize(&gl, dialect).expect("scene realize");
-                let samples = scene.msaa_samples().clamp(0, gl.get_parameter_i32(glow::MAX_SAMPLES));
+                let samples = scene
+                    .msaa_samples()
+                    .clamp(0, gl.get_parameter_i32(glow::MAX_SAMPLES));
                 let target = create_target(&gl, size, samples).expect("MSAA target");
-                let mut frame = Frame { elapsed: 0.0, delta: 1.0 / 60.0, width: size.0, height: size.1 };
+                let mut frame = Frame {
+                    elapsed: 0.0,
+                    delta: 1.0 / 60.0,
+                    width: size.0,
+                    height: size.1,
+                };
                 draw(&gl, scene.as_mut(), &target, Some(screen), &frame);
                 gl.finish();
                 let frames = 120;
@@ -686,8 +811,21 @@ mod tests {
 
                 let mut pixels = vec![0u8; (size.0 * size.1 * 4) as usize];
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(screen));
-                gl.read_pixels(0, 0, size.0, size.1, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelPackData::Slice(Some(&mut pixels)));
-                let lit = pixels.chunks_exact(4).filter(|p| p[..3].iter().any(|&c| c > 16)).count();
+                gl.read_pixels(
+                    0,
+                    0,
+                    size.0,
+                    size.1,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelPackData::Slice(Some(&mut pixels)),
+                );
+                let lit = pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .filter(|p| p[..3].iter().any(|&c| c > 16))
+                    .count();
                 let coverage = lit as f64 / f64::from(size.0 * size.1);
                 println!(
                     "{}: {samples}x MSAA, {per_frame_ms:.2} ms/frame with the GPU drained each frame, {:.1}% of pixels lit",
@@ -700,7 +838,11 @@ mod tests {
                     assert_eq!(lit, 0, "{}: a still black scene drew something", info.id);
                 }
                 if let Some(dir) = std::env::var_os("GIS_RENDER_DUMP") {
-                    save_png(&pixels, size, &Path::new(&dir).join(format!("{}.png", info.id)));
+                    save_png(
+                        &pixels,
+                        size,
+                        &Path::new(&dir).join(format!("{}.png", info.id)),
+                    );
                 }
                 delete_target(&gl, target);
                 scene.unrealize(&gl);

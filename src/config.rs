@@ -24,6 +24,8 @@ pub struct Config {
     pub respect_inhibitors: bool,
     /// An id from `animations::ALL`.
     pub animation: String,
+    /// "auto" (the desktop's language), "en" or "tr"; see i18n.rs.
+    pub language: String,
     /// Option tables keyed by animation id; each module parses its own table,
     /// so adding a module or an option never touches this struct.
     #[serde(skip_serializing_if = "toml::Table::is_empty")]
@@ -37,6 +39,7 @@ impl Default for Config {
             idle_minutes: 5,
             respect_inhibitors: true,
             animation: crate::animations::ALL[0].id.to_owned(),
+            language: "auto".to_owned(),
             animations: toml::Table::new(),
         }
     }
@@ -60,7 +63,9 @@ impl Config {
 pub fn path() -> PathBuf {
     match std::env::var_os(CONFIG_ENV) {
         Some(p) => PathBuf::from(p),
-        None => glib::user_config_dir().join("gnome-idle-screensaver").join("config.toml"),
+        None => glib::user_config_dir()
+            .join("gnome-idle-screensaver")
+            .join("config.toml"),
     }
 }
 

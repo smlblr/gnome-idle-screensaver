@@ -7,7 +7,8 @@ use super::{AnimationInfo, Frame, GlScene, GlslDialect};
 
 pub const INFO: AnimationInfo = AnimationInfo {
     id: "blank",
-    title: "Kapalı ekran (siyah)",
+    title_en: "Screen off (black)",
+    title_tr: "Kapalı ekran (siyah)",
     create,
 };
 

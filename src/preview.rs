@@ -5,7 +5,7 @@ use std::time::Duration;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
-use crate::config::{self, Config, APP_ID};
+use crate::config::{self, APP_ID, Config};
 use crate::dbus::{self, IdleMonitor};
 use crate::stage::{Mode, Stage};
 
@@ -28,7 +28,9 @@ pub fn run(seconds: Option<u32>, animation: Option<String>) -> glib::ExitCode {
         }
         let idle = dbus::session_bus().ok().map(|c| IdleMonitor::new(&c));
         let quit = app.clone();
-        let opened = Stage::open(Some(app), &config, Mode::Preview, idle, move |_| quit.quit());
+        let opened = Stage::open(Some(app), &config, Mode::Preview, idle, move |_| {
+            quit.quit()
+        });
         if let Some(s) = seconds {
             opened.close_after(Duration::from_secs(s.into()));
         }

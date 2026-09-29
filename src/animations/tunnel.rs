@@ -5,7 +5,8 @@ use super::{AnimationInfo, GlScene};
 
 pub const INFO: AnimationInfo = AnimationInfo {
     id: "tunnel",
-    title: "Tünel",
+    title_en: "Tunnel",
+    title_tr: "Tünel",
     create,
 };
 

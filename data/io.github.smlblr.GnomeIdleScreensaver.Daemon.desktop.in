@@ -1,7 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Ekran Koruyucu İzleyicisi
-Comment=Boşta kalma süresini izler, süre dolunca ekran koruyucuyu başlatır
+Name=Screensaver watcher
+Name[tr]=Ekran Koruyucu İzleyicisi
+Comment=Watches idle time and starts the screensaver when it runs out
+Comment[tr]=Boşta kalma süresini izler, süre dolunca ekran koruyucuyu başlatır
 Exec=@BINARY@ daemon
 Icon=io.github.smlblr.GnomeIdleScreensaver
 Terminal=false

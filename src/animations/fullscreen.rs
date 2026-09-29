@@ -37,7 +37,11 @@ pub struct FullscreenScene {
 impl FullscreenScene {
     /// `speed` scales `u_time`; 1.0 is the module's design speed.
     pub fn new(fragment: &'static str, speed: f32) -> Self {
-        Self { fragment, speed, gpu: None }
+        Self {
+            fragment,
+            speed,
+            gpu: None,
+        }
     }
 }
 
@@ -63,8 +67,15 @@ impl GlScene for FullscreenScene {
             gl.disable(glow::DEPTH_TEST);
             gl.disable(glow::CULL_FACE);
             gl.use_program(Some(gpu.program));
-            gl.uniform_2_f32(gpu.resolution.as_ref(), frame.width as f32, frame.height as f32);
-            gl.uniform_1_f32(gpu.time.as_ref(), (frame.elapsed * f64::from(self.speed)) as f32);
+            gl.uniform_2_f32(
+                gpu.resolution.as_ref(),
+                frame.width as f32,
+                frame.height as f32,
+            );
+            gl.uniform_1_f32(
+                gpu.time.as_ref(),
+                (frame.elapsed * f64::from(self.speed)) as f32,
+            );
             gl.bind_vertex_array(Some(gpu.vao));
             gl.draw_arrays(glow::TRIANGLES, 0, 3);
             gl.bind_vertex_array(None);

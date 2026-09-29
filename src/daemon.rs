@@ -8,7 +8,7 @@ use std::time::Duration;
 use gtk::gio::prelude::*;
 use gtk::{gio, glib};
 
-use crate::config::{self, Config, APP_ID, DAEMON_APP_ID};
+use crate::config::{self, APP_ID, Config, DAEMON_APP_ID};
 use crate::dbus::{self, IdleMonitor, SessionManager};
 use crate::stage::{Mode, Stage};
 
@@ -106,7 +106,10 @@ impl Daemon {
             }
         }) {
             Ok(monitor) => *daemon.file_monitor.borrow_mut() = Some(monitor),
-            Err(e) => info!("cannot watch {}: {e}; changes need a restart", config::path().display()),
+            Err(e) => info!(
+                "cannot watch {}: {e}; changes need a restart",
+                config::path().display()
+            ),
         }
 
         // Watches belong to our D-Bus connection inside Mutter, so (re)create them
@@ -142,7 +145,11 @@ impl Daemon {
         });
         app.add_action(&show);
 
-        info!("started: {} ({})", describe(&daemon.config.borrow()), config::path().display());
+        info!(
+            "started: {} ({})",
+            describe(&daemon.config.borrow()),
+            config::path().display()
+        );
         Ok(daemon)
     }
 
@@ -231,14 +238,23 @@ impl Daemon {
         if let Some(id) = self.deadline.borrow_mut().take() {
             id.remove();
         }
-        info!("showing screensaver ({why}); user idle for {} ms", self.idle.idletime_ms().unwrap_or(0));
+        info!(
+            "showing screensaver ({why}); user idle for {} ms",
+            self.idle.idletime_ms().unwrap_or(0)
+        );
         let weak = Rc::downgrade(self);
-        let stage = Stage::open(None, &self.config.borrow(), Mode::Idle, Some(self.idle.clone()), move |_| {
-            if let Some(d) = weak.upgrade() {
-                d.stage.borrow_mut().take();
-                d.update_deadline();
-            }
-        });
+        let stage = Stage::open(
+            None,
+            &self.config.borrow(),
+            Mode::Idle,
+            Some(self.idle.clone()),
+            move |_| {
+                if let Some(d) = weak.upgrade() {
+                    d.stage.borrow_mut().take();
+                    d.update_deadline();
+                }
+            },
+        );
         if let Some(after) = close_after {
             stage.close_after(after);
         }

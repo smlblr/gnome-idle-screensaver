@@ -1,6 +1,6 @@
 //! Animation modules. Each one is a `GlScene` plus an `AnimationInfo` entry in `ALL`;
 //! the stage (src/stage.rs) owns the window, frame clock, MSAA target and input.
-//! README.md, "Yeni bir animasyon eklemek", walks through adding one.
+//! docs/architecture.md, "Adding an animation", walks through adding one.
 
 pub mod aurora;
 pub mod blank;
@@ -15,16 +15,29 @@ use glow::HasContext;
 use serde::de::DeserializeOwned;
 
 /// Every module the settings window offers, in display order. The first is the default.
-pub const ALL: &[AnimationInfo] =
-    &[gears::INFO, starfield::INFO, plasma::INFO, tunnel::INFO, aurora::INFO, blank::INFO];
+pub const ALL: &[AnimationInfo] = &[
+    gears::INFO,
+    starfield::INFO,
+    plasma::INFO,
+    tunnel::INFO,
+    aurora::INFO,
+    blank::INFO,
+];
 
 pub struct AnimationInfo {
     /// Stored in config.toml (`animation = "…"`) and used as the options table name.
     pub id: &'static str,
-    /// Shown in the settings window.
-    pub title: &'static str,
+    /// Shown in the settings window, one per interface language.
+    pub title_en: &'static str,
+    pub title_tr: &'static str,
     /// Receives `[animations.<id>]` from config.toml, if present.
     pub create: fn(Option<&toml::Value>) -> Box<dyn GlScene>,
+}
+
+impl AnimationInfo {
+    pub fn title(&self, lang: crate::i18n::Lang) -> &'static str {
+        lang.pick(self.title_en, self.title_tr)
+    }
 }
 
 pub fn find(id: &str) -> &'static AnimationInfo {
@@ -102,12 +115,18 @@ pub fn compile_program(
     unsafe {
         let program = gl.create_program()?;
         let mut shaders = Vec::new();
-        for (kind, body) in [(glow::VERTEX_SHADER, vertex), (glow::FRAGMENT_SHADER, fragment)] {
+        for (kind, body) in [
+            (glow::VERTEX_SHADER, vertex),
+            (glow::FRAGMENT_SHADER, fragment),
+        ] {
             let shader = gl.create_shader(kind)?;
             gl.shader_source(shader, &format!("{}{body}", glsl.header()));
             gl.compile_shader(shader);
             if !gl.get_shader_compile_status(shader) {
-                return Err(format!("shader compile: {}", gl.get_shader_info_log(shader)));
+                return Err(format!(
+                    "shader compile: {}",
+                    gl.get_shader_info_log(shader)
+                ));
             }
             gl.attach_shader(program, shader);
             shaders.push(shader);
@@ -122,7 +141,10 @@ pub fn compile_program(
             gl.delete_shader(shader);
         }
         if !gl.get_program_link_status(program) {
-            return Err(format!("program link: {}", gl.get_program_info_log(program)));
+            return Err(format!(
+                "program link: {}",
+                gl.get_program_info_log(program)
+            ));
         }
         Ok(program)
     }

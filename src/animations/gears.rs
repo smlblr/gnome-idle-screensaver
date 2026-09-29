@@ -22,7 +22,8 @@ use super::{AnimationInfo, Frame, GlScene, GlslDialect};
 
 pub const INFO: AnimationInfo = AnimationInfo {
     id: "gears",
-    title: "Çarklar",
+    title_en: "Gears",
+    title_tr: "Çarklar",
     create,
 };
 
@@ -75,21 +76,39 @@ struct Placement {
 
 const PLACEMENTS: [Placement; 3] = [
     Placement {
-        spec: GearSpec { inner_radius: 1.0, outer_radius: 4.0, width: 1.0, teeth: 20, tooth_depth: 0.7 },
+        spec: GearSpec {
+            inner_radius: 1.0,
+            outer_radius: 4.0,
+            width: 1.0,
+            teeth: 20,
+            tooth_depth: 0.7,
+        },
         x: -3.0,
         y: -2.0,
         angle_factor: 1.0,
         angle_offset: 0.0,
     },
     Placement {
-        spec: GearSpec { inner_radius: 0.5, outer_radius: 2.0, width: 2.0, teeth: 10, tooth_depth: 0.7 },
+        spec: GearSpec {
+            inner_radius: 0.5,
+            outer_radius: 2.0,
+            width: 2.0,
+            teeth: 10,
+            tooth_depth: 0.7,
+        },
         x: 3.1,
         y: -2.0,
         angle_factor: -2.0,
         angle_offset: -9.0,
     },
     Placement {
-        spec: GearSpec { inner_radius: 1.3, outer_radius: 2.0, width: 0.5, teeth: 10, tooth_depth: 0.7 },
+        spec: GearSpec {
+            inner_radius: 1.3,
+            outer_radius: 2.0,
+            width: 0.5,
+            teeth: 10,
+            tooth_depth: 0.7,
+        },
         x: -3.1,
         y: 4.2,
         angle_factor: -2.0,
@@ -165,7 +184,13 @@ pub struct Gears {
 impl Gears {
     fn new(options: GearsOptions) -> Self {
         let (bounds_center, bounds_radius) = bounding_sphere();
-        Self { options, angle: 0.0, gpu: None, bounds_center, bounds_radius }
+        Self {
+            options,
+            angle: 0.0,
+            gpu: None,
+            bounds_center,
+            bounds_radius,
+        }
     }
 
     /// A symmetric frustum whose narrower axis just contains the bounding sphere,
@@ -220,7 +245,9 @@ impl GlScene for Gears {
     }
 
     fn render(&mut self, gl: &glow::Context, frame: &Frame) {
-        let Some((program, u, meshes)) = &self.gpu else { return };
+        let Some((program, u, meshes)) = &self.gpu else {
+            return;
+        };
         self.angle = (self.angle + self.options.rotation_speed * frame.delta as f32) % 360.0;
         let projection = self.projection(frame.width, frame.height);
         let view = self.view(frame.elapsed);
@@ -234,13 +261,19 @@ impl GlScene for Gears {
             gl.use_program(Some(*program));
             gl.uniform_matrix_4_f32_slice(u.projection.as_ref(), false, &projection.0);
             gl.uniform_3_f32_slice(u.light_dir.as_ref(), &light);
-            for ((placement, mesh), color) in PLACEMENTS.iter().zip(meshes).zip(&self.options.colors) {
+            for ((placement, mesh), color) in
+                PLACEMENTS.iter().zip(meshes).zip(&self.options.colors)
+            {
                 let angle = placement.angle_factor * self.angle + placement.angle_offset;
                 let model_view = view
                     * Mat4::translation(placement.x, placement.y, 0.0)
                     * Mat4::rotation(angle, 0.0, 0.0, 1.0);
                 gl.uniform_matrix_4_f32_slice(u.model_view.as_ref(), false, &model_view.0);
-                gl.uniform_matrix_3_f32_slice(u.normal_matrix.as_ref(), false, &model_view.rotation_part());
+                gl.uniform_matrix_3_f32_slice(
+                    u.normal_matrix.as_ref(),
+                    false,
+                    &model_view.rotation_part(),
+                );
                 gl.uniform_3_f32_slice(u.color.as_ref(), color);
                 gl.bind_vertex_array(Some(mesh.vao));
                 gl.draw_arrays(glow::TRIANGLES, 0, mesh.vertices);
@@ -292,7 +325,10 @@ fn upload(gl: &glow::Context, vertices: &[f32]) -> Result<GpuMesh, String> {
         let vbo = gl.create_buffer()?;
         gl.bind_vertex_array(Some(vao));
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-        let bytes = std::slice::from_raw_parts(vertices.as_ptr().cast::<u8>(), std::mem::size_of_val(vertices));
+        let bytes = std::slice::from_raw_parts(
+            vertices.as_ptr().cast::<u8>(),
+            std::mem::size_of_val(vertices),
+        );
         gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::STATIC_DRAW);
         let stride = (FLOATS_PER_VERTEX * 4) as i32;
         gl.enable_vertex_attrib_array(ATTR_POSITION);
@@ -301,13 +337,23 @@ fn upload(gl: &glow::Context, vertices: &[f32]) -> Result<GpuMesh, String> {
         gl.vertex_attrib_pointer_f32(ATTR_NORMAL, 3, glow::FLOAT, false, stride, 12);
         gl.bind_vertex_array(None);
         gl.bind_buffer(glow::ARRAY_BUFFER, None);
-        Ok(GpuMesh { vao, vbo, vertices: (vertices.len() / FLOATS_PER_VERTEX) as i32 })
+        Ok(GpuMesh {
+            vao,
+            vbo,
+            vertices: (vertices.len() / FLOATS_PER_VERTEX) as i32,
+        })
     }
 }
 
 /// glxgears' gear(), statement for statement, against the immediate-mode shim below.
 fn gear(s: GearSpec) -> Vec<f32> {
-    let GearSpec { inner_radius, outer_radius, width, teeth, tooth_depth } = s;
+    let GearSpec {
+        inner_radius,
+        outer_radius,
+        width,
+        teeth,
+        tooth_depth,
+    } = s;
     let (cos, sin) = (f32::cos, f32::sin);
     let mut gl = Immediate::default();
 
@@ -329,7 +375,11 @@ fn gear(s: GearSpec) -> Vec<f32> {
         gl.vertex3f(r1 * cos(angle), r1 * sin(angle), width * 0.5);
         if i < teeth {
             gl.vertex3f(r0 * cos(angle), r0 * sin(angle), width * 0.5);
-            gl.vertex3f(r1 * cos(angle + 3.0 * da), r1 * sin(angle + 3.0 * da), width * 0.5);
+            gl.vertex3f(
+                r1 * cos(angle + 3.0 * da),
+                r1 * sin(angle + 3.0 * da),
+                width * 0.5,
+            );
         }
     }
     gl.end();
@@ -340,8 +390,16 @@ fn gear(s: GearSpec) -> Vec<f32> {
         let angle = i as f32 * 2.0 * PI / teeth as f32;
         gl.vertex3f(r1 * cos(angle), r1 * sin(angle), width * 0.5);
         gl.vertex3f(r2 * cos(angle + da), r2 * sin(angle + da), width * 0.5);
-        gl.vertex3f(r2 * cos(angle + 2.0 * da), r2 * sin(angle + 2.0 * da), width * 0.5);
-        gl.vertex3f(r1 * cos(angle + 3.0 * da), r1 * sin(angle + 3.0 * da), width * 0.5);
+        gl.vertex3f(
+            r2 * cos(angle + 2.0 * da),
+            r2 * sin(angle + 2.0 * da),
+            width * 0.5,
+        );
+        gl.vertex3f(
+            r1 * cos(angle + 3.0 * da),
+            r1 * sin(angle + 3.0 * da),
+            width * 0.5,
+        );
     }
     gl.end();
 
@@ -354,7 +412,11 @@ fn gear(s: GearSpec) -> Vec<f32> {
         gl.vertex3f(r1 * cos(angle), r1 * sin(angle), -width * 0.5);
         gl.vertex3f(r0 * cos(angle), r0 * sin(angle), -width * 0.5);
         if i < teeth {
-            gl.vertex3f(r1 * cos(angle + 3.0 * da), r1 * sin(angle + 3.0 * da), -width * 0.5);
+            gl.vertex3f(
+                r1 * cos(angle + 3.0 * da),
+                r1 * sin(angle + 3.0 * da),
+                -width * 0.5,
+            );
             gl.vertex3f(r0 * cos(angle), r0 * sin(angle), -width * 0.5);
         }
     }
@@ -364,8 +426,16 @@ fn gear(s: GearSpec) -> Vec<f32> {
     gl.begin(Primitive::Quads);
     for i in 0..teeth {
         let angle = i as f32 * 2.0 * PI / teeth as f32;
-        gl.vertex3f(r1 * cos(angle + 3.0 * da), r1 * sin(angle + 3.0 * da), -width * 0.5);
-        gl.vertex3f(r2 * cos(angle + 2.0 * da), r2 * sin(angle + 2.0 * da), -width * 0.5);
+        gl.vertex3f(
+            r1 * cos(angle + 3.0 * da),
+            r1 * sin(angle + 3.0 * da),
+            -width * 0.5,
+        );
+        gl.vertex3f(
+            r2 * cos(angle + 2.0 * da),
+            r2 * sin(angle + 2.0 * da),
+            -width * 0.5,
+        );
         gl.vertex3f(r2 * cos(angle + da), r2 * sin(angle + da), -width * 0.5);
         gl.vertex3f(r1 * cos(angle), r1 * sin(angle), -width * 0.5);
     }
@@ -387,13 +457,29 @@ fn gear(s: GearSpec) -> Vec<f32> {
         gl.vertex3f(r2 * cos(angle + da), r2 * sin(angle + da), width * 0.5);
         gl.vertex3f(r2 * cos(angle + da), r2 * sin(angle + da), -width * 0.5);
         gl.normal3f(cos(angle), sin(angle), 0.0);
-        gl.vertex3f(r2 * cos(angle + 2.0 * da), r2 * sin(angle + 2.0 * da), width * 0.5);
-        gl.vertex3f(r2 * cos(angle + 2.0 * da), r2 * sin(angle + 2.0 * da), -width * 0.5);
+        gl.vertex3f(
+            r2 * cos(angle + 2.0 * da),
+            r2 * sin(angle + 2.0 * da),
+            width * 0.5,
+        );
+        gl.vertex3f(
+            r2 * cos(angle + 2.0 * da),
+            r2 * sin(angle + 2.0 * da),
+            -width * 0.5,
+        );
         let u = r1 * cos(angle + 3.0 * da) - r2 * cos(angle + 2.0 * da);
         let v = r1 * sin(angle + 3.0 * da) - r2 * sin(angle + 2.0 * da);
         gl.normal3f(v, -u, 0.0);
-        gl.vertex3f(r1 * cos(angle + 3.0 * da), r1 * sin(angle + 3.0 * da), width * 0.5);
-        gl.vertex3f(r1 * cos(angle + 3.0 * da), r1 * sin(angle + 3.0 * da), -width * 0.5);
+        gl.vertex3f(
+            r1 * cos(angle + 3.0 * da),
+            r1 * sin(angle + 3.0 * da),
+            width * 0.5,
+        );
+        gl.vertex3f(
+            r1 * cos(angle + 3.0 * da),
+            r1 * sin(angle + 3.0 * da),
+            -width * 0.5,
+        );
         gl.normal3f(cos(angle), sin(angle), 0.0);
     }
 
@@ -469,8 +555,8 @@ impl Immediate {
         let v = std::mem::take(&mut self.vertices);
         match self.primitive {
             Primitive::Quads => {
-                for q in v.chunks_exact(4) {
-                    self.quad([q[0], q[1], q[2], q[3]], q[3].1);
+                for q in v.as_chunks::<4>().0 {
+                    self.quad(*q, q[3].1);
                 }
             }
             Primitive::QuadStrip => {
@@ -488,7 +574,11 @@ impl Immediate {
                 continue;
             }
             for (position, normal) in tri {
-                let normal = if self.shade == Shade::Flat { provoking_normal } else { normal };
+                let normal = if self.shade == Shade::Flat {
+                    provoking_normal
+                } else {
+                    normal
+                };
                 self.out.extend_from_slice(&position);
                 self.out.extend_from_slice(&normal);
             }
@@ -501,7 +591,11 @@ fn is_degenerate(tri: &[Vertex; 3]) -> bool {
     let [a, b, c] = tri.map(|v| v.0);
     let e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    let n = [
+        e1[1] * e2[2] - e1[2] * e2[1],
+        e1[2] * e2[0] - e1[0] * e2[2],
+        e1[0] * e2[1] - e1[1] * e2[0],
+    ];
     n[0] * n[0] + n[1] * n[1] + n[2] * n[2] < 1e-12
 }
 
@@ -510,7 +604,9 @@ mod tests {
     use super::*;
 
     fn triangles(mesh: &[f32]) -> Vec<[[f32; 6]; 3]> {
-        mesh.chunks_exact(18)
+        mesh.as_chunks::<18>()
+            .0
+            .iter()
             .map(|t| [0, 1, 2].map(|i| t[i * 6..i * 6 + 6].try_into().unwrap()))
             .collect()
     }
@@ -523,9 +619,16 @@ mod tests {
         for [a, b, c] in triangles(&mesh) {
             let e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
             let e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-            let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+            let n = [
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0],
+            ];
             let dot = n[0] * a[3] + n[1] * a[4] + n[2] * a[5];
-            assert!(dot > 0.0, "triangle wound against its normal: {a:?} {b:?} {c:?}");
+            assert!(
+                dot > 0.0,
+                "triangle wound against its normal: {a:?} {b:?} {c:?}"
+            );
         }
     }
 
@@ -533,7 +636,7 @@ mod tests {
     fn bounding_sphere_contains_every_vertex_at_any_angle() {
         let (center, radius) = bounding_sphere();
         for p in &PLACEMENTS {
-            for v in gear(p.spec).chunks_exact(6) {
+            for v in gear(p.spec).as_chunks::<6>().0 {
                 // Distance from the gear axis is rotation-invariant.
                 let r = v[0].hypot(v[1]);
                 let d = ((p.x - center[0]).hypot(p.y - center[1]) + r).hypot(v[2]);

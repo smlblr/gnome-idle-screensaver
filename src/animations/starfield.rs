@@ -6,7 +6,8 @@ use super::{AnimationInfo, GlScene};
 
 pub const INFO: AnimationInfo = AnimationInfo {
     id: "starfield",
-    title: "Yıldızlar",
+    title_en: "Starfield",
+    title_tr: "Yıldızlar",
     create,
 };
 

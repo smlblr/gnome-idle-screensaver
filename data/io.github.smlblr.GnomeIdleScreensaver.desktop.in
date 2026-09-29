@@ -1,12 +1,16 @@
 [Desktop Entry]
 Type=Application
-Name=Ekran Koruyucu
-GenericName=Ekran koruyucu ayarları
-Comment=Bilgisayar boşta kalınca tam ekran animasyon gösteren ekran koruyucunun ayarları
+Name=Screensaver
+Name[tr]=Ekran Koruyucu
+GenericName=Screensaver settings
+GenericName[tr]=Ekran koruyucu ayarları
+Comment=Settings for the screensaver that shows a full-screen animation when the computer is idle
+Comment[tr]=Bilgisayar boşta kalınca tam ekran animasyon gösteren ekran koruyucunun ayarları
 Exec=@BINARY@ settings
 Icon=io.github.smlblr.GnomeIdleScreensaver
 Terminal=false
 Categories=Settings;DesktopSettings;GTK;
-Keywords=screensaver;ekran;koruyucu;boşta;idle;çark;gears;
+Keywords=screensaver;idle;gears;starfield;
+Keywords[tr]=ekran;koruyucu;boşta;çark;
 StartupNotify=true
 StartupWMClass=io.github.smlblr.GnomeIdleScreensaver

@@ -98,8 +98,14 @@ mod tests {
 
     #[test]
     fn rotation_is_counter_clockwise_like_gl_rotatef() {
-        assert!(close(apply(&Mat4::rotation(90.0, 0.0, 0.0, 1.0), [1.0, 0.0, 0.0]), [0.0, 1.0, 0.0]));
-        assert!(close(apply(&Mat4::rotation(90.0, 1.0, 0.0, 0.0), [0.0, 1.0, 0.0]), [0.0, 0.0, 1.0]));
+        assert!(close(
+            apply(&Mat4::rotation(90.0, 0.0, 0.0, 1.0), [1.0, 0.0, 0.0]),
+            [0.0, 1.0, 0.0]
+        ));
+        assert!(close(
+            apply(&Mat4::rotation(90.0, 1.0, 0.0, 0.0), [0.0, 1.0, 0.0]),
+            [0.0, 0.0, 1.0]
+        ));
     }
 
     #[test]

@@ -24,6 +24,8 @@ pub fn session_bus() -> Result<gio::DBusConnection, glib::Error> {
     gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
 }
 
+// Every argument is a distinct D-Bus call parameter; a struct would only rename them.
+#[allow(clippy::too_many_arguments)]
 fn call(
     conn: &gio::DBusConnection,
     dest: &str,
@@ -62,8 +64,22 @@ impl IdleMonitor {
         Self { conn: conn.clone() }
     }
 
-    fn call(&self, method: &str, args: Option<glib::Variant>, reply: &str) -> Result<glib::Variant, glib::Error> {
-        call(&self.conn, IDLE_BUS, IDLE_PATH, IDLE_IFACE, method, args.as_ref(), reply, TIMEOUT_MS)
+    fn call(
+        &self,
+        method: &str,
+        args: Option<glib::Variant>,
+        reply: &str,
+    ) -> Result<glib::Variant, glib::Error> {
+        call(
+            &self.conn,
+            IDLE_BUS,
+            IDLE_PATH,
+            IDLE_IFACE,
+            method,
+            args.as_ref(),
+            reply,
+            TIMEOUT_MS,
+        )
     }
 
     pub fn idletime_ms(&self) -> Result<u64, glib::Error> {
@@ -73,7 +89,8 @@ impl IdleMonitor {
     /// Mutter keeps this watch across activity and fires it again after each idle
     /// period, but never while a session idle inhibitor exists.
     pub fn add_idle_watch(&self, interval_ms: u64) -> Result<u32, glib::Error> {
-        self.call("AddIdleWatch", Some((interval_ms,).to_variant()), "(u)").map(single)
+        self.call("AddIdleWatch", Some((interval_ms,).to_variant()), "(u)")
+            .map(single)
     }
 
     /// One-shot: Mutter removes it after it fires.
@@ -87,7 +104,10 @@ impl IdleMonitor {
         }
     }
 
-    pub fn subscribe_watch_fired(&self, on_fired: impl Fn(u32) + 'static) -> gio::SignalSubscription {
+    pub fn subscribe_watch_fired(
+        &self,
+        on_fired: impl Fn(u32) + 'static,
+    ) -> gio::SignalSubscription {
         self.conn.subscribe_to_signal(
             Some(IDLE_BUS),
             Some(IDLE_IFACE),
@@ -130,32 +150,67 @@ impl SessionManager {
     }
 
     pub fn is_idle_inhibited(&self) -> Result<bool, glib::Error> {
-        call(&self.conn, SM_BUS, SM_PATH, SM_IFACE, "IsInhibited", Some(&(INHIBIT_IDLE,).to_variant()), "(b)", TIMEOUT_MS)
-            .map(single)
+        call(
+            &self.conn,
+            SM_BUS,
+            SM_PATH,
+            SM_IFACE,
+            "IsInhibited",
+            Some(&(INHIBIT_IDLE,).to_variant()),
+            "(b)",
+            TIMEOUT_MS,
+        )
+        .map(single)
     }
 
     pub fn idle_inhibitors(&self) -> Result<Vec<Inhibitor>, glib::Error> {
-        let paths: Vec<ObjectPath> =
-            single(call(&self.conn, SM_BUS, SM_PATH, SM_IFACE, "GetInhibitors", None, "(ao)", TIMEOUT_MS)?);
+        let paths: Vec<ObjectPath> = single(call(
+            &self.conn,
+            SM_BUS,
+            SM_PATH,
+            SM_IFACE,
+            "GetInhibitors",
+            None,
+            "(ao)",
+            TIMEOUT_MS,
+        )?);
         let mut found = Vec::new();
         for path in paths {
             let get = |method: &str, reply: &str| {
-                call(&self.conn, SM_BUS, path.as_str(), INHIBITOR_IFACE, method, None, reply, TIMEOUT_MS)
+                call(
+                    &self.conn,
+                    SM_BUS,
+                    path.as_str(),
+                    INHIBITOR_IFACE,
+                    method,
+                    None,
+                    reply,
+                    TIMEOUT_MS,
+                )
             };
             // An inhibitor can disappear between GetInhibitors and these calls.
-            let Ok(flags) = get("GetFlags", "(u)").map(single::<u32>) else { continue };
+            let Ok(flags) = get("GetFlags", "(u)").map(single::<u32>) else {
+                continue;
+            };
             if flags & INHIBIT_IDLE == 0 {
                 continue;
             }
-            let app_id = get("GetAppId", "(s)").map(single::<String>).unwrap_or_default();
-            let reason = get("GetReason", "(s)").map(single::<String>).unwrap_or_default();
+            let app_id = get("GetAppId", "(s)")
+                .map(single::<String>)
+                .unwrap_or_default();
+            let reason = get("GetReason", "(s)")
+                .map(single::<String>)
+                .unwrap_or_default();
             found.push(Inhibitor { app_id, reason });
         }
         Ok(found)
     }
 
     /// Fires on InhibitorAdded/InhibitorRemoved and on InhibitedActions changes.
-    pub fn subscribe_changes(&self, on_change: impl Fn() + 'static) -> Vec<gio::SignalSubscription> {
+    pub fn subscribe_changes(
+        &self,
+        on_change: impl Fn() + 'static,
+    ) -> Vec<gio::SignalSubscription> {
         let on_change = std::rc::Rc::new(on_change);
         let sub = |iface: &str, member: &str| {
             let on_change = on_change.clone();
@@ -182,20 +237,42 @@ impl SessionManager {
 pub fn playing_media_players(conn: &gio::DBusConnection) -> Vec<String> {
     const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
     const MPRIS_PATH: &str = "/org/mpris/MediaPlayer2";
-    let Ok(names) = call(conn, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames", None, "(as)", TIMEOUT_MS)
-        .map(single::<Vec<String>>)
-    else {
+    let Ok(names) = call(
+        conn,
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "ListNames",
+        None,
+        "(as)",
+        TIMEOUT_MS,
+    )
+    .map(single::<Vec<String>>) else {
         return Vec::new();
     };
     let prop = |name: &str, iface: &str, prop: &str| -> Option<String> {
-        let v = call(conn, name, MPRIS_PATH, "org.freedesktop.DBus.Properties", "Get", Some(&(iface, prop).to_variant()), "(v)", 500)
-            .ok()?;
+        let v = call(
+            conn,
+            name,
+            MPRIS_PATH,
+            "org.freedesktop.DBus.Properties",
+            "Get",
+            Some(&(iface, prop).to_variant()),
+            "(v)",
+            500,
+        )
+        .ok()?;
         single::<glib::Variant>(v).get::<String>()
     };
     names
         .iter()
         .filter(|n| n.starts_with(MPRIS_PREFIX))
-        .filter(|n| prop(n, "org.mpris.MediaPlayer2.Player", "PlaybackStatus").as_deref() == Some("Playing"))
-        .map(|n| prop(n, "org.mpris.MediaPlayer2", "Identity").unwrap_or_else(|| n[MPRIS_PREFIX.len()..].to_owned()))
+        .filter(|n| {
+            prop(n, "org.mpris.MediaPlayer2.Player", "PlaybackStatus").as_deref() == Some("Playing")
+        })
+        .map(|n| {
+            prop(n, "org.mpris.MediaPlayer2", "Identity")
+                .unwrap_or_else(|| n[MPRIS_PREFIX.len()..].to_owned())
+        })
         .collect()
 }
