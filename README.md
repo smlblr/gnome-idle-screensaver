@@ -178,7 +178,7 @@ Tek ikili, üç alt komut; her biri ayrı süreç:
 - **Engelleyiciler.** Mutter boşta-kalma engeli (oturum bayrağı 8) varken `AddIdleWatch`
   izlemelerini *hiç tetiklemez*. Bu makinede ölçüldü: kullanıcı 589 sn boştayken 3 sn'lik izleme
   12 sn içinde gelmedi, `GetIdletime` ise saymayı sürdürdü. Mutter'ın kaynak koduna göre engel
-  kalkınca boşta sayacı da sıfırlanır; bu kısım henüz ölçülmedi.
+  kalkınca boşta sayacı da sıfırlanır.
   Sonuç olarak:
   - **"Video oynarken başlama" açıkken** (varsayılan) Mutter'ın davranışı zaten istenen davranış.
     İzleyici tetiklenme anında ayrıca `IsInhibited(8)` ile bir kez daha denetler. Askıya alma
@@ -199,7 +199,7 @@ Tek ikili, üç alt komut; her biri ayrı süreç:
 
 Sahne penceresi uzun ömürlü izleyici sürecinin içinde, `fullscreen_on_monitor` ile açılır.
 Wayland'de istemci kendini öne getiremez; karar Mutter'ındır. Mutter'ın kaynak koduna göre
-beklenen davranış şöyle; **bu makinede henüz ölçülmedi** (bkz. Ölçümler):
+beklenen davranış şöyle; odak alması bu makinede görüldü (bkz. Ölçümler):
 - Zaman damgası bilgisi olmayan yeni bir pencere odak alır ve öne yerleşir.
 - Odaklı pencere bir terminalse yalnızca öne yerleşir, odak terminalde kalır.
 - `present()` ayrıca bir xdg-activation isteği gönderir. Son girdi seri numarası taşımayan bu
@@ -278,36 +278,42 @@ gerekmez. Örnek olarak `gears.rs`'e bakın.
 - **Intel GPU, NVIDIA değil.** PRIME offload değişkenleri kullanılmaz; GTK'nın bağlamı varsayılan
   EGL aygıtında (Intel UHD 630) açılır. Günlükteki `GL:` satırı sürücüyü gösterir.
 
-## Ölçümler (MSI GP63, Ubuntu 24.04, GNOME 46 Wayland, Intel UHD 630)
+## Ölçümler (MSI GP63, Ubuntu 24.04, GNOME 46 Wayland, Intel UHD 630, 1920×1080 @ 60 Hz)
+
+Gerçek pencerede, `preview --animation X -v` ile 8 sn'lik örnekler. CPU yüzdesi 100 = bir çekirdek
+(12 iş parçacıklı makinede toplamın yüzde 0,4'ü kadar).
+
+| Animasyon | CPU | Kare hızı (kararlı) | Ekran dışı kare süresi |
+|---|---|---|---|
+| Çarklar | %4,9 | 59,6–60,0 | 1,2–1,7 ms |
+| Yıldızlar | %2,9 | 59,2–59,8 | 4,5 ms |
+| Plazma | %5,6 | 59,6–59,7 | 1,5 ms |
+| Tünel | %5,8 | 59,6–60,0 | 1,9 ms |
+| Kuzey ışıkları | %4,3 | 59,7–59,8 | 4,3 ms |
+| Kapalı ekran | %0,0 | çizilmiyor | 0,5 ms |
+
+Kare hızı kare saatine kilitli (60 Hz dikey senkron). İlk 5 sn'lik pencere daha yüksek görünür,
+çünkü açılış karelerini de sayar; yukarıdaki değerler ondan sonrakilerdir.
 
 | Ölçüm | Sonuç |
 |---|---|
-| İzleyici boşta, ilk gösterimden önce | 60 sn'de **%0,00 CPU** (hiç CPU tiki yok), **RSS 22,5 MB**, 4 iş parçacığı |
-| İkinci `daemon` | "already running" der, 0 ile çıkar |
-| Ayar değişikliği → izleyici | Yeniden başlatmadan yansıyor: yerinde düzenleme, `rename` ile değiştirme, `enabled` aç/kapa. Bozuk TOML'da önceki ayarlar korunuyor. Hepsi 1,5 sn'lik gözlem aralığında |
-| Mutter izlemesi, engel varken | 589 sn boştayken 3 sn'lik `AddIdleWatch` 12 sn içinde tetiklenmedi |
-| GL bağlamı (GTK'nın seçimi) | **OpenGL ES 3.2**, Mesa 25.2.8, Intel UHD 630 (CFL GT2). NVIDIA kullanılmıyor |
-| Çizim, ekran dışı (`cargo test -- --ignored`) | 1920×1080, 4x MSAA: **1,46 ms/kare**, her karede GPU boşaltılarak. GL hatası yok. Kenarlarda ara tonlar var (MSAA çözümlemesi çalışıyor) |
-| Ekran dışı kare süresi, 1920×1080 | gears 1,6 · plazma 1,5 · tünel 2,0 · kuzey ışıkları 4,4 · yıldızlar 4,6 ms (60 Hz bütçesi 16,7 ms) |
-| Derleme | `nice -n 10 cargo build --release -j 2`, yaklaşık 3 dk. Makinede başka bir süreç 5,5 çekirdek kullanırken yük en fazla 9,05, en yüksek 86 °C |
+| İzleyici, ilk gösterimden önce | 60 sn'de %0,00 CPU, RSS 22,9 MB |
+| İzleyici, gösterim sırasında | RSS 142 MB (PSS 49 MB: GTK ve Mesa paylaşılan kitaplıkları sayılır) |
+| İzleyici, gösterim kapandıktan sonra | RSS 140 MB'a yakın kalır (kitaplıklar bırakılmıyor), CPU %0,00 |
+| Kapanma gecikmesi | Tuş: girdi→işleyici 0,6–1,5 ms, →Mutter onayı 9–40 ms. Fare: 2–14 ms ve 15–40 ms |
+| Küçük titreme (3 px) | 5/5 denemede kapatmadı |
+| Belirgin hareket (250 px) | 5/5 denemede kapattı |
+| Odak | Pencere odağı alıyor (`active=true`, açıldıktan 1 sn sonra) |
+| Engelleyici varken (Mutter `idle-inhibit`), anahtar açık | 67 sn boştayken (eşik 60 sn) başlamadı |
+| Aynı durum, anahtar kapatılınca | Dosya değişince yeniden okunup hemen başladı |
+| 7 ardışık açma/kapama | Çökme yok, izleyici ayakta |
+| Ekran görüntüsü | Gerçek tam ekran doğrulandı: üst çubuk ve kenarlık yok |
+| Oturum açılışında otomatik başlama | 2026-09-28'de gözlendi; 5 dk sonra kendiliğinden açıldı |
+| Derleme | `nice -n 10 cargo build --release -j 2`, yaklaşık 3 dk; en fazla yük 9,05, 86 °C |
 
-**Henüz ölçülmedi** (ekranı kaplayan testler ertelendi):
-- Ekranda kare hızı ve dikey senkron kilidi, animasyon sırasında CPU.
-- İlk gösterimden sonra izleyicinin RSS'i (GL sürücüsü yüklendikten sonra).
-- Boşta süre dolunca pencerenin gerçekten öne gelip odak alması; dokununca kapanma gecikmesi.
-- Engel varken başlamaması, anahtar kapalıyken başlaması.
-- Oturum kapatıp açınca otomatik başlama.
-
-### Ekran testleri için araçlar (`tools/`)
-
-- `tools/test-config.toml`: 1 dk eşikli test ayarı. `GNOME_IDLE_SCREENSAVER_CONFIG` ile verilir;
-  asıl ayar dosyasına dokunmaz.
-- `tools/inject.py move:3,2 sleep:1 move:120,0 key:0xffe1`: Mutter RemoteDesktop üzerinden yapay
-  girdi. Günlükteki kapanma satırıyla karşılaştırmak için enjeksiyon zamanını CLOCK_MONOTONIC
-  olarak yazar.
-- `tools/shot.py çıktı.png`: portal üzerinden etkileşimsiz ekran görüntüsü; dosyayı ~/Pictures'tan
-  alıp taşır.
-- `tools/cpu.sh PID SANİYE`: sürecin o aralıktaki CPU %'si (100 = bir çekirdek) ve RSS'i.
+**Ölçülmedi:** engelleyici *yokken* 1 dk'lık boşta beklemenin kendisi (bu oturumda kaldırılamayan bir
+engelleyici var; gerçek boşta açılış 2026-09-28 günlüğünde görüldü) ve `gnome-session-inhibit`
+ile oluşturulmuş ek engelleyici.
 
 ## Bilinen sınırlar
 
