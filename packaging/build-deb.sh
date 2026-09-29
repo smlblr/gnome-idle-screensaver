@@ -7,7 +7,7 @@ cd "$(dirname "$(readlink -f "$0")")/.."
 
 APP_ID=io.github.smlblr.GnomeIdleScreensaver
 PKG=gnome-idle-screensaver
-BIN=target/release/$PKG
+BIN=${CARGO_TARGET_DIR:-target}/release/$PKG
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 ARCH=$(dpkg --print-architecture)
 OUT=dist/${PKG}_${VERSION}_${ARCH}.deb
