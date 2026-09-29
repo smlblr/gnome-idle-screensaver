@@ -213,8 +213,8 @@ impl Ui {
                 }
                 ui.update(|c| c.language = setting.to_owned());
                 ui.lang.set(Lang::resolve(setting));
-                // Not from inside this handler: GObject holds back notifications raised
-                // while it runs, and they would arrive after the guard is released.
+                // Not from inside this handler: its own notifications arrive late and loop.
+                // See docs/architecture.md, "Language switching".
                 let weak = Rc::downgrade(ui);
                 glib::idle_add_local_once(move || with(&weak, |ui| ui.retranslate()));
             });

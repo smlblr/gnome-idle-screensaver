@@ -241,8 +241,8 @@ impl Inner {
         let windows = std::mem::take(&mut *self.windows.borrow_mut());
         let opened_at = self.opened_at;
         let on_closed = self.on_closed.borrow_mut().take();
-        // Teardown waits for the next main-loop turn: destroying the window whose event is
-        // still being dispatched, then a Wayland round trip, segfaulted in libgtk (2026-09-28).
+        // Deferred: destroying the window mid-dispatch crashed libgtk.
+        // See docs/architecture.md, "Window teardown".
         glib::idle_add_local_once(move || {
             let display = windows.first().map(WidgetExt::display);
             for window in windows {
