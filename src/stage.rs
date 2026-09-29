@@ -62,6 +62,7 @@ struct Inner {
     closed: Cell<bool>,
     on_closed: RefCell<Option<Box<dyn FnOnce(CloseReason)>>>,
     motion: Cell<Option<MotionBurst>>,
+    pointer: Cell<Option<(f64, f64)>>,
     last_input: Cell<Option<Instant>>,
     idle_monitor: Option<IdleMonitor>,
     active_watch: Cell<Option<u32>>,
@@ -92,6 +93,7 @@ impl Stage {
             closed: Cell::new(false),
             on_closed: RefCell::new(Some(Box::new(on_closed))),
             motion: Cell::new(None),
+            pointer: Cell::new(None),
             last_input: Cell::new(None),
             idle_monitor,
             active_watch: Cell::new(None),
@@ -152,9 +154,11 @@ impl Inner {
     fn on_motion(self: &Rc<Self>, x: f64, y: f64, event_time: u32) {
         let now = Instant::now();
         self.last_input.set(Some(now));
+        // A new burst starts where the pointer last rested, so a single large jump counts.
+        let (rest_x, rest_y) = self.pointer.replace(Some((x, y))).unwrap_or((x, y));
         let burst = match self.motion.get() {
             Some(b) if now - b.last < MOTION_QUIET && !self.in_grace() => b,
-            _ => MotionBurst { x, y, last: now },
+            _ => MotionBurst { x: rest_x, y: rest_y, last: now },
         };
         if (x - burst.x).hypot(y - burst.y) >= MOTION_THRESHOLD {
             self.close(CloseReason::Motion, Some(event_time));
@@ -349,9 +353,10 @@ fn attach_input(inner: &Rc<Inner>, window: &gtk::Window) {
 
     let motion = gtk::EventControllerMotion::new();
     let weak = Rc::downgrade(inner);
-    motion.connect_enter(move |_, _, _| {
+    motion.connect_enter(move |_, x, y| {
         if let Some(inner) = weak.upgrade() {
             inner.last_input.set(Some(Instant::now()));
+            inner.pointer.set(Some((x, y)));
         }
     });
     let weak = Rc::downgrade(inner);
