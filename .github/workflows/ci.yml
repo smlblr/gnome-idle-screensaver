@@ -1,0 +1,67 @@
+name: CI
+
+# Public repository: standard GitHub-hosted runners are free and unlimited. The runs are kept
+# short anyway: main and pull requests only, and a newer push cancels the older run.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pinned so a new clippy lint cannot turn main red on its own; bump it on purpose.
+  RUST_VERSION: "1.98.1"
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-4-dev libadwaita-1-dev pkg-config desktop-file-utils
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt,clippy
+          rustup default "$RUST_VERSION"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-${{ env.RUST_VERSION }}-
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Desktop entries
+        run: |
+          for f in data/*.desktop.in; do
+            sed 's|@BINARY@|/usr/bin/gnome-idle-screensaver|' "$f" > "/tmp/$(basename "${f%.in}")"
+          done
+          desktop-file-validate /tmp/*.desktop
+
+      - name: Build the .deb
+        run: |
+          cargo build --release --locked
+          ./packaging/build-deb.sh
