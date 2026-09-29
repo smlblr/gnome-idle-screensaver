@@ -393,6 +393,7 @@ struct Renderer {
     clock: Clock,
     stats: Stats,
     checked_errors: bool,
+    rendered: u32,
 }
 
 fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
@@ -405,6 +406,7 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
         clock: Clock::default(),
         stats: Stats::default(),
         checked_errors: false,
+        rendered: 0,
     }));
 
     let r = renderer.clone();
@@ -463,7 +465,7 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
     let r = renderer.clone();
     area.connect_render(move |_, _| {
         let mut r = r.borrow_mut();
-        let Renderer { scene, gl, samples, target, size, clock, stats, checked_errors } = &mut *r;
+        let Renderer { scene, gl, samples, target, size, clock, stats, checked_errors, rendered } = &mut *r;
         let Some(gl) = gl.as_ref() else { return glib::Propagation::Proceed };
         let (width, height) = *size;
         if width <= 0 || height <= 0 {
@@ -494,6 +496,7 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
             }
         }
         stats.frames += 1;
+        *rendered += 1;
         glib::Propagation::Stop
     });
 
@@ -509,6 +512,10 @@ fn attach_renderer(area: &gtk::GLArea, scene: Box<dyn GlScene>) {
         clock.last_us = Some(now_us);
         if crate::log::verbose() {
             log_stats(&mut r, frame_clock, now_us);
+        }
+        // Three frames so the buffer chain (GTK's plus ours) has been filled at least once.
+        if !r.scene.animated() && r.rendered >= 3 {
+            return glib::ControlFlow::Break;
         }
         area.queue_render();
         glib::ControlFlow::Continue
@@ -681,7 +688,11 @@ mod tests {
                     info.id,
                     coverage * 100.0
                 );
-                assert!(coverage > 0.01, "{}: frame is (almost) black", info.id);
+                if scene.animated() {
+                    assert!(coverage > 0.01, "{}: frame is (almost) black", info.id);
+                } else {
+                    assert_eq!(lit, 0, "{}: a still black scene drew something", info.id);
+                }
                 if let Some(dir) = std::env::var_os("GIS_RENDER_DUMP") {
                     save_png(&pixels, size, &Path::new(&dir).join(format!("{}.png", info.id)));
                 }

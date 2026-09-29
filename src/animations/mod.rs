@@ -3,6 +3,7 @@
 //! README.md, "Yeni bir animasyon eklemek", walks through adding one.
 
 pub mod aurora;
+pub mod blank;
 pub mod fullscreen;
 pub mod gears;
 pub mod math;
@@ -15,7 +16,7 @@ use serde::de::DeserializeOwned;
 
 /// Every module the settings window offers, in display order. The first is the default.
 pub const ALL: &[AnimationInfo] =
-    &[gears::INFO, starfield::INFO, plasma::INFO, tunnel::INFO, aurora::INFO];
+    &[gears::INFO, starfield::INFO, plasma::INFO, tunnel::INFO, aurora::INFO, blank::INFO];
 
 pub struct AnimationInfo {
     /// Stored in config.toml (`animation = "…"`) and used as the options table name.
@@ -70,6 +71,12 @@ pub trait GlScene {
     /// Requested MSAA sample count; the stage clamps it to what the driver allows.
     fn msaa_samples(&self) -> i32 {
         4
+    }
+
+    /// A scene that returns false is drawn a few times and then left alone, so a still
+    /// picture costs no GPU or CPU per frame.
+    fn animated(&self) -> bool {
+        true
     }
 }
 

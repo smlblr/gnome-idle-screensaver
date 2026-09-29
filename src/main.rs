@@ -22,7 +22,7 @@ Komutlar:
 Seçenekler:
   -v, --verbose     Ayrıntılı günlük: kare hızı, odak, kapanma gecikmesi
   --seconds N       preview: N saniye sonra kendiliğinden kapan
-  --animation ID    preview: ayardakini değil bunu göster (gears, starfield, plasma, tunnel, aurora)
+  --animation ID    preview: ayardakini değil bunu göster (gears, starfield, plasma, tunnel, aurora, blank)
   -h, --help        Bu yardımı gösterir
 
 Ortam değişkeni:
